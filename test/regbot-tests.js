@@ -1,0 +1,161 @@
+const test = require('tape');
+const clearModule = require('clear-module');
+const exec = require('child_process').exec;
+const opts = Object.assign({
+  timestamp: () => { return `, "time": "${new Date().toISOString()}"`; }
+}, { level: process.env.JAMBONES_LOGLEVEL || 'info' });
+const logger = require('pino')(opts);
+const {
+  addToSet,
+  removeFromSet } = require('@jambonz/realtimedb-helpers')({
+    host: process.env.JAMBONES_REDIS_HOST || 'localhost',
+    port: process.env.JAMBONES_REDIS_PORT || 6379
+  }, logger);
+const setName = `${(process.env.JAMBONES_CLUSTER_ID || 'default')}:active-sip`;
+
+process.on('unhandledRejection', (reason, p) => {
+  console.log('Unhandled Rejection at: Promise', p, 'reason:', reason);
+});
+
+function connect(connectable) {
+  return new Promise((resolve, reject) => {
+    connectable.on('connect', () => {
+      return resolve();
+    });
+  });
+}
+
+const wait = (duration) => {
+  return new Promise((resolve) => {
+    setTimeout(resolve, duration);
+  });
+};
+
+test('populating more test case data', (t) => {
+  exec(`mysql -h 127.0.0.1 -u root --protocol=tcp -D jambones_test < ${__dirname}/db/populate-test-data2.sql`, (err, stdout, stderr) => {
+    if (err) return t.end(err);
+    t.pass('test data set created');
+    t.end();
+  });
+});
+
+test('trunk register tests', (t) => {
+  clearModule.all();
+  const { srf } = require('../app');
+  t.timeoutAfter(60000);
+
+  connect(srf)
+    .then(wait.bind(null, 1500))
+    .then(() => {
+      const obj = srf.locals.regbotStatus();
+      return t.ok(obj.total === 1 && obj.registered === 1, 'initial regbot running and successfully registered to trunk');
+    })
+    .then(() => {
+      return new Promise((resolve, reject) => {
+        exec(`mysql -h 127.0.0.1 -u root --protocol=tcp   -D jambones_test < ${__dirname}/db/populate-test-data3.sql`, (err, stdout, stderr) => {
+          if (err) return reject(err);
+          t.pass('added new gateway');
+          resolve();
+        });
+      });
+    })
+    .then(() => {
+      return wait(35000);
+    })
+    .then(() => {
+      const obj = srf.locals.regbotStatus();
+      return t.ok(obj.total === 2 && obj.registered === 1, 'successfully added gateway that tests failure result');
+    })
+    .then(() => {
+      return new Promise((resolve, reject) => {
+        exec(`mysql -h 127.0.0.1 -u root --protocol=tcp   -D jambones_test -e "delete from sip_gateways where sip_gateway_sid = '987a5339-c62c-4075-9e19-f4de70a96597'"`, (err, stdout, stderr) => {
+          if (err) return reject(err);
+          t.pass('added new gateway');
+          resolve();
+        });
+      });
+    })
+    .then(() => {
+      if (srf.locals.lb) srf.locals.lb.disconnect();
+      srf.disconnect();
+      t.end();
+      return;
+    })
+    .catch((err) => {
+      if (srf.locals.lb) srf.locals.lb.disconnect();
+
+      if (srf) srf.disconnect();
+      console.log(`error received: ${err}`);
+      t.error(err);
+    });
+});
+
+test('trunk register tests when its IP in redis cache', (t) => {
+  clearModule.all();
+  const { srf } = require('../app');
+  t.timeoutAfter(60000);
+  addToSet(setName, "172.39.0.10:5060");
+
+  connect(srf)
+    .then(wait.bind(null, 1500))
+    .then(() => {
+      const obj = srf.locals.regbotStatus();
+      return t.ok(obj.total === 1 && obj.registered === 1, 'initial regbot running and successfully registered to trunk');
+    })
+    .then(() => {
+      if (srf.locals.lb) srf.locals.lb.disconnect();
+      srf.disconnect();
+      t.end();
+      removeFromSet(setName, "172.39.0.10:5060");
+      return;
+    })
+    .catch((err) => {
+      if (srf.locals.lb) srf.locals.lb.disconnect();
+
+      if (srf) srf.disconnect();
+      removeFromSet(setName, "172.39.0.10:5060");
+      console.log(`error received: ${err}`);
+      t.error(err);
+    });
+});
+
+test('trunk not register tests when its IP in redis cache', (t) => {
+  clearModule.all();
+  const { srf } = require('../app');
+  t.timeoutAfter(60000);
+  addToSet(setName, "172.39.0.11:5060")
+
+  connect(srf)
+    .then(wait.bind(null, 1500))
+    .then(() => {
+      return t.ok(!srf.locals.regbotStatus, 'No Regbot initiated');
+    })
+    .then(()=> {
+      return removeFromSet(setName, "172.39.0.11:5060");
+    })
+    .then(() => {
+      return addToSet(setName, "172.39.0.10:5060")
+    })
+    .then(() => {
+      return wait(35000);
+    })
+    .then(()=> {
+      const obj = srf.locals.regbotStatus();
+      return t.ok(obj.total === 1 && obj.registered === 1, 'initial regbot running and successfully registered to trunk');
+    })
+    .then(() => {
+      if (srf.locals.lb) srf.locals.lb.disconnect();
+      srf.disconnect();
+      t.end();
+      removeFromSet(setName, "172.39.0.11:5060");
+      return;
+    })
+    .catch((err) => {
+      if (srf.locals.lb) srf.locals.lb.disconnect();
+
+      if (srf) srf.disconnect();
+      removeFromSet(setName, "172.39.0.11:5060");
+      console.log(`error received: ${err}`);
+      t.error(err);
+    });
+});

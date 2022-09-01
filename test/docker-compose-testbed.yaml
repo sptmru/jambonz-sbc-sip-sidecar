@@ -1,0 +1,64 @@
+version: '3'
+
+networks:
+  sbc-registrar:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.39.0.0/16
+
+services:
+  mysql:
+    image: mysql:5.7
+    platform: linux/x86_64
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "--protocol", "tcp"]
+      timeout: 5s
+      retries: 10
+    networks:
+      sbc-registrar:
+        ipv4_address: 172.39.0.2
+  sbc:
+    image: drachtio/drachtio-server:latest
+    command: drachtio --contact "sip:*;transport=udp" --loglevel debug --sofia-loglevel 9
+    ports:
+      - "9022:9022/tcp"
+    networks:
+      sbc-registrar:
+        ipv4_address: 172.39.0.10
+    depends_on:
+      mysql:
+        condition: service_healthy
+  redis:
+    image: redis:5-alpine
+    ports:
+      - "16379:6379/tcp"
+    networks:
+      sbc-registrar:
+        ipv4_address: 172.39.0.13
+
+  sipp-uas-auth-register:
+    image: drachtio/sipp:latest
+    command: sipp -sf /tmp/uas-auth-register.xml
+    container_name: sipp-uas-auth-register
+    volumes:
+      - ./scenarios:/tmp
+    tty: true
+    networks:
+      sbc-registrar:
+        ipv4_address: 172.39.0.14
+
+  sipp-uas-auth-register-fail:
+    image: drachtio/sipp:latest
+    command: sipp -sf /tmp/uas-auth-register2.xml
+    container_name: sipp-uas-auth-register2
+    volumes:
+      - ./scenarios:/tmp
+    tty: true
+    networks:
+      sbc-registrar:
+        ipv4_address: 172.39.0.15

@@ -51,7 +51,7 @@ srf.on('connect', (err, hp) => {
     // Only run when I'm the first member in the set Of Actip Sip SBC
     const set = await retrieveSet(setName);
     const newArray = Array.from(set);
-    let startRegBot = !newArray || newArray.length == 0;
+    let startRegBot = !newArray || newArray.length === 0;
     if (!startRegBot) {
       const firstSbc = newArray.at(0);
       const hostports = hp.split(',');
@@ -67,6 +67,7 @@ srf.on('connect', (err, hp) => {
       srf.locals.regbotStatus = require('./lib/sip-trunk-register')(logger, srf);
     } else {
       // Timer 30 seconds to make sure the task is transfered to another SBC outbound handler
+      // In case the first server is dead.
       setTimeout(ativateRegBot.bind(this, err, hp), 30 * 1000);
     }
   };

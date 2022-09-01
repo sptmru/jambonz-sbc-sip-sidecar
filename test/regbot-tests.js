@@ -119,7 +119,7 @@ test('trunk register tests when its IP in redis cache', (t) => {
     });
 });
 
-test('trunk not register tests when its IP in redis cache', (t) => {
+test('trunk not register tests when its IP is not in redis cache', (t) => {
   clearModule.all();
   const { srf } = require('../app');
   t.timeoutAfter(60000);

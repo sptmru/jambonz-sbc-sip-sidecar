@@ -1,12 +1,13 @@
 const assert = require('assert');
 assert.ok(process.env.JAMBONES_MYSQL_HOST &&
-    process.env.JAMBONES_MYSQL_USER &&
-    process.env.JAMBONES_MYSQL_PASSWORD &&
-    process.env.JAMBONES_MYSQL_DATABASE, 'missing JAMBONES_MYSQL_XXX env vars');
+  process.env.JAMBONES_MYSQL_USER &&
+  process.env.JAMBONES_MYSQL_PASSWORD &&
+  process.env.JAMBONES_MYSQL_DATABASE, 'missing JAMBONES_MYSQL_XXX env vars');
 assert.ok(process.env.JAMBONES_REDIS_HOST, 'missing JAMBONES_REDIS_HOST env var');
 assert.ok(process.env.DRACHTIO_HOST, 'missing DRACHTIO_HOST env var');
 assert.ok(process.env.DRACHTIO_PORT, 'missing DRACHTIO_PORT env var');
 assert.ok(process.env.DRACHTIO_SECRET, 'missing DRACHTIO_SECRET env var');
+
 const opts = Object.assign({
   timestamp: () => { return `, "time": "${new Date().toISOString()}"`; }
 }, { level: process.env.JAMBONES_LOGLEVEL || 'info' });
@@ -14,10 +15,21 @@ const logger = require('pino')(opts);
 const Srf = require('drachtio-srf');
 const srf = new Srf();
 const setName = `${(process.env.JAMBONES_CLUSTER_ID || 'default')}:active-sip`;
-
+const StatsCollector = require('@jambonz/stats-collector');
+const stats = new StatsCollector(logger);
+const { initLocals, rejectIpv4, checkCache, checkAccountLimits } = require('./lib/middleware');
+const responseTime = require('drachtio-mw-response-time');
+const regParser = require('drachtio-mw-registration-parser');
+const Registrar = require('@jambonz/mw-registrar');
+const Emitter = require('events');
+const debug = require('debug')('jambonz:sbc-registrar');
 const {
+  lookupAuthHook,
   lookupAllVoipCarriers,
   lookupSipGatewaysByCarrier,
+  lookupAccountBySipRealm,
+  lookupAccountCapacitiesBySid,
+  addSbcAddress
 } = require('@jambonz/db-helpers')({
   host: process.env.JAMBONES_MYSQL_HOST,
   user: process.env.JAMBONES_MYSQL_USER,
@@ -25,22 +37,45 @@ const {
   database: process.env.JAMBONES_MYSQL_DATABASE,
   connectionLimit: process.env.JAMBONES_MYSQL_CONNECTION_LIMIT || 10
 }, logger);
+const {
+  writeAlerts,
+  AlertType
+} = require('@jambonz/time-series')(logger, {
+  host: process.env.JAMBONES_TIME_SERIES_HOST,
+  commitSize: 50,
+  commitInterval: 'test' === process.env.NODE_ENV ? 7 : 20
+});
 
 const {
-  retrieveSet } = require('@jambonz/realtimedb-helpers')({
+  addToSet,
+  removeFromSet,
+  isMemberOfSet,
+  retrieveSet
+} = require('@jambonz/realtimedb-helpers')({
   host: process.env.JAMBONES_REDIS_HOST || 'localhost',
   port: process.env.JAMBONES_REDIS_PORT || 6379
 }, logger);
 
 srf.locals = {
   ...srf.locals,
+  stats,
+  addToSet, removeFromSet, isMemberOfSet, retrieveSet,
+  registrar: new Registrar(logger, {
+    host: process.env.JAMBONES_REDIS_HOST,
+    port: process.env.JAMBONES_REDIS_PORT || 6379
+  }),
   dbHelpers: {
+    lookupAuthHook,
     lookupAllVoipCarriers,
     lookupSipGatewaysByCarrier,
+    lookupAccountBySipRealm,
+    lookupAccountCapacitiesBySid
   },
   realtimeDbHelpers: {
     retrieveSet
-  }
+  },
+  writeAlerts,
+  AlertType
 };
 
 srf.connect({ host: process.env.DRACHTIO_HOST, port: process.env.DRACHTIO_PORT, secret: process.env.DRACHTIO_SECRET });
@@ -48,6 +83,17 @@ srf.on('connect', (err, hp) => {
   const ativateRegBot = async(err, hp) => {
     if (err) return logger.error({ err }, 'Error connecting to drachtio server');
     logger.info(`connected to drachtio listening on ${hp}`);
+
+    // Add SBC Public IP to Database
+    const hostports = hp.split(',');
+    for (const hp of hostports) {
+      const arr = /^(.*)\/(.*):(\d+)$/.exec(hp);
+      if (arr && 'udp' === arr[1]) {
+        logger.info(`adding sbc public address to database: ${arr[2]}`);
+        addSbcAddress(arr[2]);
+      }
+    }
+
     // Only run when I'm the first member in the set Of Actip Sip SBC
     const set = await retrieveSet(setName);
     const newArray = Array.from(set);
@@ -79,5 +125,78 @@ if (process.env.NODE_ENV === 'test') {
     logger.info(err, 'Error connecting to drachtio');
   });
 }
+
+const rttMetric = (req, res, time) => {
+  if (res.cached) {
+    stats.histogram('sbc.registration.cached.response_time', time.toFixed(0), [`status:${res.statusCode}`]);
+  }
+  else {
+    stats.histogram('sbc.registration.total.response_time', time.toFixed(0), [`status:${res.statusCode}`]);
+  }
+};
+
+class RegOutcomeReporter extends Emitter {
+  constructor() {
+    super();
+    this
+      .on('regHookOutcome', ({ rtt, status }) => {
+        stats.histogram('app.hook.response_time', rtt, ['hook_type:auth', `status:${status}`]);
+        if (![200, 403].includes(status)) {
+          stats.increment('app.hook.error.count', ['hook_type:auth', `status:${status}`]);
+        }
+      })
+      .on('error', async(err, req) => {
+        logger.error({ err }, 'http webhook failed');
+        const { account_sid } = req.locals;
+        if (account_sid) {
+          let opts = { account_sid };
+          if (err.code === 'ECONNREFUSED') {
+            opts = { ...opts, alert_type: AlertType.WEBHOOK_CONNECTION_FAILURE, url: err.hook };
+          }
+          else if (err.code === 'ENOTFOUND') {
+            opts = { ...opts, alert_type: AlertType.WEBHOOK_CONNECTION_FAILURE, url: err.hook };
+          }
+          else if (err.name === 'StatusError') {
+            opts = { ...opts, alert_type: AlertType.WEBHOOK_STATUS_FAILURE, url: err.hook, status: err.statusCode };
+          }
+
+          if (opts.alert_type) {
+            try {
+              await writeAlerts(opts);
+            } catch (err) {
+              logger.error({ err, opts }, 'Error writing alert');
+            }
+          }
+        }
+      });
+  }
+}
+
+const authenticator = require('@jambonz/http-authenticator')(lookupAuthHook, logger, {
+  emitter: new RegOutcomeReporter()
+});
+
+// middleware
+srf.use('register', [
+  initLocals,
+  responseTime(rttMetric),
+  rejectIpv4(logger),
+  regParser,
+  checkCache(logger),
+  checkAccountLimits(logger),
+  authenticator]);
+
+srf.use('options', [
+  initLocals
+]);
+
+srf.register(require('./lib/register')({logger}));
+srf.options(require('./lib/options')({srf, logger}));
+
+setInterval(async() => {
+  const count = await srf.locals.registrar.getCountOfUsers();
+  debug(`count of registered users: ${count}`);
+  stats.gauge('sbc.users.count', parseInt(count));
+}, 30000);
 
 module.exports = { srf, logger };

@@ -1,7 +1,7 @@
 version: '3'
 
 networks:
-  sbc-registrar:
+  sbc-sip-sidecar:
     driver: bridge
     ipam:
       config:
@@ -20,7 +20,7 @@ services:
       timeout: 5s
       retries: 10
     networks:
-      sbc-registrar:
+      sbc-sip-sidecar:
         ipv4_address: 172.39.0.2
   sbc:
     image: drachtio/drachtio-server:latest
@@ -28,17 +28,28 @@ services:
     ports:
       - "9022:9022/tcp"
     networks:
-      sbc-registrar:
+      sbc-sip-sidecar:
         ipv4_address: 172.39.0.10
     depends_on:
       mysql:
         condition: service_healthy
+
+  auth-server:
+    image: jambonz/customer-auth-server:latest
+    command: npm start
+    ports:
+      - "4000:4000/tcp"
+    env_file: docker.env
+    networks:
+      sbc-sip-sidecar:
+        ipv4_address: 172.39.0.12
+
   redis:
     image: redis:5-alpine
     ports:
       - "16379:6379/tcp"
     networks:
-      sbc-registrar:
+      sbc-sip-sidecar:
         ipv4_address: 172.39.0.13
 
   sipp-uas-auth-register:
@@ -49,7 +60,7 @@ services:
       - ./scenarios:/tmp
     tty: true
     networks:
-      sbc-registrar:
+      sbc-sip-sidecar:
         ipv4_address: 172.39.0.14
 
   sipp-uas-auth-register-fail:
@@ -60,5 +71,14 @@ services:
       - ./scenarios:/tmp
     tty: true
     networks:
-      sbc-registrar:
+      sbc-sip-sidecar:
         ipv4_address: 172.39.0.15
+  uas:
+    image: drachtio/sipp:latest
+    command: sipp -sf /tmp/uas.xml
+    volumes:
+      - ./scenarios:/tmp
+    tty: true
+    networks:
+      sbc-sip-sidecar:
+        ipv4_address: 172.39.0.60

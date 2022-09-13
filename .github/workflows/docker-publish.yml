@@ -11,7 +11,7 @@ on:
       - v*
 
 env:
-  IMAGE_NAME: sbc-inbound
+  IMAGE_NAME: sbc-sip-sidecar
 
 jobs:
   push:

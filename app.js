@@ -99,7 +99,7 @@ srf.on('connect', (err, hp) => {
     const newArray = Array.from(set);
     let startRegBot = !newArray || newArray.length === 0;
     if (!startRegBot) {
-      const firstSbc = newArray.at(0);
+      const firstSbc = newArray[0];
       const hostports = hp.split(',');
       for (const hp of hostports) {
         const arr = /^(.*)\/(.*:\d+)$/.exec(hp);

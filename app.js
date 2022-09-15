@@ -90,6 +90,7 @@ srf.on('connect', (err, hp) => {
       const arr = /^(.*)\/(.*):(\d+)$/.exec(hp);
       if (arr && 'udp' === arr[1]) {
         logger.info(`adding sbc public address to database: ${arr[2]}`);
+        srf.locals.sbcPublicIpAddress = `${arr[2]}:${arr[3]}`;
         addSbcAddress(arr[2]);
       }
     }

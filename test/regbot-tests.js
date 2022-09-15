@@ -119,6 +119,37 @@ test('trunk register tests when its IP in redis cache', (t) => {
     });
 });
 
+
+test('trunk register with sbc public IP address', (t) => {
+  clearModule.all();
+  const { srf } = require('../app');
+  t.timeoutAfter(60000);
+  process.env.JAMBONES_REGBOT_CONTACT_USE_IP = true;
+  addToSet(setName, "172.39.0.10:5060");
+
+  connect(srf)
+    .then(wait.bind(null, 1500))
+    .then(() => {
+      const obj = srf.locals.regbotStatus();
+      return t.ok(obj.total === 1 && obj.registered === 1, 'initial regbot running and successfully registered to trunk');
+    })
+    .then(() => {
+      if (srf.locals.lb) srf.locals.lb.disconnect();
+      srf.disconnect();
+      t.end();
+      removeFromSet(setName, "172.39.0.10:5060");
+      return;
+    })
+    .catch((err) => {
+      if (srf.locals.lb) srf.locals.lb.disconnect();
+
+      if (srf) srf.disconnect();
+      removeFromSet(setName, "172.39.0.10:5060");
+      console.log(`error received: ${err}`);
+      t.error(err);
+    });
+});
+
 test('trunk not register tests when its IP is not in redis cache', (t) => {
   clearModule.all();
   const { srf } = require('../app');

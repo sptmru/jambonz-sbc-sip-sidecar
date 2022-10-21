@@ -30,14 +30,15 @@
     "@jambonz/db-helpers": "^0.6.18",
     "@jambonz/http-authenticator": "^0.2.2",
     "@jambonz/mw-registrar": "^0.2.2",
-    "@jambonz/realtimedb-helpers": "^0.4.29",
+    "@jambonz/realtimedb-helpers": "^0.4.34",
     "@jambonz/stats-collector": "^0.1.6",
     "@jambonz/time-series": "^0.2.5",
     "debug": "^4.3.4",
     "drachtio-mw-registration-parser": "^0.1.0",
     "drachtio-mw-response-time": "^1.0.2",
     "drachtio-srf": "^4.5.17",
-    "pino": "^6.14.0"
+    "pino": "^6.14.0",
+    "short-uuid": "^4.2.2"
   },
   "devDependencies": {
     "clear-module": "^4.1.2",

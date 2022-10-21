@@ -14,7 +14,6 @@ const opts = Object.assign({
 const logger = require('pino')(opts);
 const Srf = require('drachtio-srf');
 const srf = new Srf();
-const setName = `${(process.env.JAMBONES_CLUSTER_ID || 'default')}:active-sip`;
 const StatsCollector = require('@jambonz/stats-collector');
 const stats = new StatsCollector(logger);
 const { initLocals, rejectIpv4, checkCache, checkAccountLimits } = require('./lib/middleware');
@@ -47,6 +46,9 @@ const {
 });
 
 const {
+  addKey,
+  addKeyNx,
+  retrieveKey,
   addToSet,
   removeFromSet,
   isMemberOfSet,
@@ -72,6 +74,9 @@ srf.locals = {
     lookupAccountCapacitiesBySid
   },
   realtimeDbHelpers: {
+    addKey,
+    addKeyNx,
+    retrieveKey,
     retrieveSet
   },
   writeAlerts,
@@ -80,45 +85,22 @@ srf.locals = {
 
 srf.connect({ host: process.env.DRACHTIO_HOST, port: process.env.DRACHTIO_PORT, secret: process.env.DRACHTIO_SECRET });
 srf.on('connect', (err, hp) => {
-  const ativateRegBot = async(err, hp) => {
-    if (err) return logger.error({ err }, 'Error connecting to drachtio server');
-    logger.info(`connected to drachtio listening on ${hp}`);
+  if (err) return logger.error({ err }, 'Error connecting to drachtio server');
+  logger.info(`connected to drachtio listening on ${hp}`);
 
-    // Add SBC Public IP to Database
-    const hostports = hp.split(',');
-    for (const hp of hostports) {
-      const arr = /^(.*)\/(.*):(\d+)$/.exec(hp);
-      if (arr && 'udp' === arr[1]) {
-        logger.info(`adding sbc public address to database: ${arr[2]}`);
-        srf.locals.sbcPublicIpAddress = `${arr[2]}:${arr[3]}`;
-        addSbcAddress(arr[2]);
-      }
+  // Add SBC Public IP to Database
+  const hostports = hp.split(',');
+  for (const hp of hostports) {
+    const arr = /^(.*)\/(.*):(\d+)$/.exec(hp);
+    if (arr && 'udp' === arr[1]) {
+      logger.info(`adding sbc public address to database: ${arr[2]}`);
+      srf.locals.sbcPublicIpAddress = `${arr[2]}:${arr[3]}`;
+      addSbcAddress(arr[2]);
     }
+  }
 
-    // Only run when I'm the first member in the set Of Actip Sip SBC
-    const set = await retrieveSet(setName);
-    const newArray = Array.from(set);
-    let startRegBot = !newArray || newArray.length === 0;
-    if (!startRegBot) {
-      const firstSbc = newArray[0];
-      const hostports = hp.split(',');
-      for (const hp of hostports) {
-        const arr = /^(.*)\/(.*:\d+)$/.exec(hp);
-        if (firstSbc === arr[2]) {
-          startRegBot = true;
-          break;
-        }
-      }
-    }
-    if (startRegBot) {
-      srf.locals.regbotStatus = require('./lib/sip-trunk-register')(logger, srf);
-    } else {
-      // Timer 30 seconds to make sure the task is transfered to another SBC outbound handler
-      // In case the first server is dead.
-      setTimeout(ativateRegBot.bind(this, err, hp), 30 * 1000);
-    }
-  };
-  ativateRegBot(err, hp);
+  /* start regbot */
+  require('./lib/sip-trunk-register')(logger, srf);
 });
 
 if (process.env.NODE_ENV === 'test') {

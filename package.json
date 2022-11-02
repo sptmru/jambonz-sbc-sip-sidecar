@@ -27,7 +27,7 @@
   },
   "homepage": "https://github.com/xquanluu/sbc-outbound-handler#readme",
   "dependencies": {
-    "@jambonz/db-helpers": "^0.7.2",
+    "@jambonz/db-helpers": "^0.7.3",
     "@jambonz/http-authenticator": "^0.2.2",
     "@jambonz/mw-registrar": "^0.2.2",
     "@jambonz/realtimedb-helpers": "^0.4.34",

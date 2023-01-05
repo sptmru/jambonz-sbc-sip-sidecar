@@ -8,10 +8,7 @@ assert.ok(process.env.DRACHTIO_HOST, 'missing DRACHTIO_HOST env var');
 assert.ok(process.env.DRACHTIO_PORT, 'missing DRACHTIO_PORT env var');
 assert.ok(process.env.DRACHTIO_SECRET, 'missing DRACHTIO_SECRET env var');
 
-const opts = Object.assign({
-  timestamp: () => { return `, "time": "${new Date().toISOString()}"`; }
-}, { level: process.env.JAMBONES_LOGLEVEL || 'info' });
-const logger = require('pino')(opts);
+const logger = require('pino')({ level: process.env.JAMBONES_LOGLEVEL || 'info' });
 const Srf = require('drachtio-srf');
 const srf = new Srf();
 const StatsCollector = require('@jambonz/stats-collector');
@@ -60,6 +57,7 @@ const {
 
 srf.locals = {
   ...srf.locals,
+  logger,
   stats,
   addToSet, removeFromSet, isMemberOfSet, retrieveSet,
   registrar: new Registrar(logger, {
@@ -163,10 +161,10 @@ const authenticator = require('@jambonz/http-authenticator')(lookupAuthHook, log
 srf.use('register', [
   initLocals,
   responseTime(rttMetric),
-  rejectIpv4(logger),
+  rejectIpv4,
   regParser,
-  checkCache(logger),
-  checkAccountLimits(logger),
+  checkCache,
+  checkAccountLimits,
   authenticator]);
 
 srf.use('options', [

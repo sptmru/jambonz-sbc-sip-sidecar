@@ -25,7 +25,8 @@ const {
   lookupSipGatewaysByCarrier,
   lookupAccountBySipRealm,
   lookupAccountCapacitiesBySid,
-  addSbcAddress
+  addSbcAddress,
+  updateVoipCarriersRegisterStatus
 } = require('@jambonz/db-helpers')({
   host: process.env.JAMBONES_MYSQL_HOST,
   user: process.env.JAMBONES_MYSQL_USER,
@@ -69,7 +70,8 @@ srf.locals = {
     lookupAllVoipCarriers,
     lookupSipGatewaysByCarrier,
     lookupAccountBySipRealm,
-    lookupAccountCapacitiesBySid
+    lookupAccountCapacitiesBySid,
+    updateVoipCarriersRegisterStatus
   },
   realtimeDbHelpers: {
     addKey,

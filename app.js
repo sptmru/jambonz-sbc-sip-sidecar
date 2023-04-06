@@ -26,6 +26,7 @@ const {
   lookupAccountBySipRealm,
   lookupAccountCapacitiesBySid,
   addSbcAddress,
+  cleanSbcAddresses,
   updateVoipCarriersRegisterStatus
 } = require('@jambonz/db-helpers')({
   host: process.env.JAMBONES_MYSQL_HOST,
@@ -55,6 +56,8 @@ const {
   host: process.env.JAMBONES_REDIS_HOST || 'localhost',
   port: process.env.JAMBONES_REDIS_PORT || 6379
 }, logger);
+
+const interval = process.env.SBC_PUBLIC_ADDRESS_KEEP_ALIVE_IN_MILISECOND || 900000; // Default 15 minutes
 
 srf.locals = {
   ...srf.locals,
@@ -96,6 +99,11 @@ srf.on('connect', (err, hp) => {
       logger.info(`adding sbc public address to database: ${arr[2]}`);
       srf.locals.sbcPublicIpAddress = `${arr[2]}:${arr[3]}`;
       addSbcAddress(arr[2]);
+      // keep alive for this SBC
+      setTimeout(() => {
+        addSbcAddress(arr[2]);
+        cleanSbcAddresses();
+      }, interval);
     }
   }
 

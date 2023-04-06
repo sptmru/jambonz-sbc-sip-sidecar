@@ -99,6 +99,7 @@ srf.on('connect', (err, hp) => {
       logger.info(`adding sbc public address to database: ${arr[2]}`);
       srf.locals.sbcPublicIpAddress = `${arr[2]}:${arr[3]}`;
       addSbcAddress(arr[2]);
+      cleanSbcAddresses();
       // keep alive for this SBC
       setTimeout(() => {
         addSbcAddress(arr[2]);

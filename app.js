@@ -7,6 +7,7 @@ assert.ok(process.env.JAMBONES_REDIS_HOST, 'missing JAMBONES_REDIS_HOST env var'
 assert.ok(process.env.DRACHTIO_HOST, 'missing DRACHTIO_HOST env var');
 assert.ok(process.env.DRACHTIO_PORT, 'missing DRACHTIO_PORT env var');
 assert.ok(process.env.DRACHTIO_SECRET, 'missing DRACHTIO_SECRET env var');
+assert.ok(process.env.JAMBONES_TIME_SERIES_HOST, 'missing JAMBONES_TIME_SERIES_HOST env var');
 
 const logger = require('pino')({ level: process.env.JAMBONES_LOGLEVEL || 'info' });
 const Srf = require('drachtio-srf');
@@ -31,6 +32,7 @@ const {
 } = require('@jambonz/db-helpers')({
   host: process.env.JAMBONES_MYSQL_HOST,
   user: process.env.JAMBONES_MYSQL_USER,
+  port: process.env.JAMBONES_MYSQL_PORT || 3306,
   password: process.env.JAMBONES_MYSQL_PASSWORD,
   database: process.env.JAMBONES_MYSQL_DATABASE,
   connectionLimit: process.env.JAMBONES_MYSQL_CONNECTION_LIMIT || 10
@@ -53,7 +55,7 @@ const {
   isMemberOfSet,
   retrieveSet
 } = require('@jambonz/realtimedb-helpers')({
-  host: process.env.JAMBONES_REDIS_HOST || 'localhost',
+  host: process.env.JAMBONES_REDIS_HOST,
   port: process.env.JAMBONES_REDIS_PORT || 6379
 }, logger);
 

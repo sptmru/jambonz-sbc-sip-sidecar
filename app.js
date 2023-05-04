@@ -98,32 +98,32 @@ srf.on('connect', (err, hp) => {
   const hostports = hp.split(',');
   for (const hp of hostports) {
     const arr = /^(.*)\/(.*):(\d+)$/.exec(hp);
-    if (arr ) {
+    if (arr) {
       const ipv4 = arr[2];
       const port = arr[3];
       const addr = map.get(ipv4) || {ipv4};
-      switch(arr[1]) {
+      switch (arr[1]) {
         case 'udp':
           srf.locals.sbcPublicIpAddress = `${ipv4}:${port}`;
-          map.set(ipv4, {...addr, port: port})
+          map.set(ipv4, {...addr, port: port});
           break;
         case 'tls':
-          map.set(ipv4, {...addr, tls_port: port})
+          map.set(ipv4, {...addr, tls_port: port});
           break;
         case 'wss':
-          map.set(ipv4, {...addr, wss_port: port})
+          map.set(ipv4, {...addr, wss_port: port});
           break;
       }
     }
   }
 
-  map.forEach(addr => {
+  map.forEach((addr) => {
     addSbcAddress(addr.ipv4, addr.port, addr.tls_port, addr.wss_port);
     // keep alive for this SBC
     setTimeout(() => {
       addSbcAddress(addr.ipv4, addr.port, addr.tls_port, addr.wss_port);
     }, interval);
-  })
+  });
 
   // first start up, clean sbc address
   cleanSbcAddresses();

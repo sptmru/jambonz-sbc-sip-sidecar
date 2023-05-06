@@ -94,21 +94,42 @@ srf.on('connect', (err, hp) => {
   logger.info(`connected to drachtio listening on ${hp}`);
 
   // Add SBC Public IP to Database
+  const map = new Map();
   const hostports = hp.split(',');
   for (const hp of hostports) {
     const arr = /^(.*)\/(.*):(\d+)$/.exec(hp);
-    if (arr && 'udp' === arr[1]) {
-      logger.info(`adding sbc public address to database: ${arr[2]}`);
-      srf.locals.sbcPublicIpAddress = `${arr[2]}:${arr[3]}`;
-      addSbcAddress(arr[2]);
-      cleanSbcAddresses();
-      // keep alive for this SBC
-      setTimeout(() => {
-        addSbcAddress(arr[2]);
-        cleanSbcAddresses();
-      }, interval);
+    if (arr) {
+      const ipv4 = arr[2];
+      const port = arr[3];
+      const addr = map.get(ipv4) || {ipv4};
+      switch (arr[1]) {
+        case 'udp':
+          srf.locals.sbcPublicIpAddress = `${ipv4}:${port}`;
+          map.set(ipv4, {...addr, port: port});
+          break;
+        case 'tls':
+          map.set(ipv4, {...addr, tls_port: port});
+          break;
+        case 'wss':
+          map.set(ipv4, {...addr, wss_port: port});
+          break;
+      }
     }
   }
+
+  map.forEach((addr) => {
+    addSbcAddress(addr.ipv4, addr.port, addr.tls_port, addr.wss_port);
+    // keep alive for this SBC
+    setTimeout(() => {
+      addSbcAddress(addr.ipv4, addr.port, addr.tls_port, addr.wss_port);
+    }, interval);
+  });
+
+  // first start up, clean sbc address
+  cleanSbcAddresses();
+  setTimeout(() => {
+    cleanSbcAddresses();
+  }, interval);
 
   /* start regbot */
   require('./lib/sip-trunk-register')(logger, srf);

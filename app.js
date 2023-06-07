@@ -73,6 +73,7 @@ const {
 });
 
 const {
+  client,
   addKey,
   addKeyNx,
   retrieveKey,
@@ -92,10 +93,7 @@ srf.locals = {
   logger,
   stats,
   addToSet, removeFromSet, isMemberOfSet, retrieveSet,
-  registrar: new Registrar(logger, {
-    host: process.env.JAMBONES_REDIS_HOST,
-    port: process.env.JAMBONES_REDIS_PORT || 6379
-  }),
+  registrar: new Registrar(logger, client),
   dbHelpers: {
     lookupAuthHook,
     lookupAllVoipCarriers,

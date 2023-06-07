@@ -93,7 +93,10 @@ srf.locals = {
   logger,
   stats,
   addToSet, removeFromSet, isMemberOfSet, retrieveSet,
-  registrar: new Registrar(logger, client),
+  registrar: new Registrar(logger, JAMBONES_REDIS_SENTINELS ?? {
+    host: process.env.JAMBONES_REDIS_HOST,
+    port: process.env.JAMBONES_REDIS_PORT || 6379
+  }),
   dbHelpers: {
     lookupAuthHook,
     lookupAllVoipCarriers,

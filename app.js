@@ -81,7 +81,7 @@ const {
   removeFromSet,
   isMemberOfSet,
   retrieveSet
-} = require('@jambonz/realtimedb-helpers')(JAMBONES_REDIS_SENTINELS ?? {
+} = require('@jambonz/realtimedb-helpers')(JAMBONES_REDIS_SENTINELS || {
   host: process.env.JAMBONES_REDIS_HOST,
   port: process.env.JAMBONES_REDIS_PORT || 6379
 }, logger);

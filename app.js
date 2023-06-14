@@ -44,7 +44,7 @@ const { initLocals, rejectIpv4, checkCache, checkAccountLimits } = require('./li
 const responseTime = require('drachtio-mw-response-time');
 const regParser = require('drachtio-mw-registration-parser');
 const Registrar = require('@jambonz/mw-registrar');
-const Emitter = require('events');
+const digestChallenge = require('./lib/register-authenticator');
 const debug = require('debug')('jambonz:sbc-registrar');
 const {
   lookupAuthHook,
@@ -54,7 +54,8 @@ const {
   lookupAccountCapacitiesBySid,
   addSbcAddress,
   cleanSbcAddresses,
-  updateVoipCarriersRegisterStatus
+  updateVoipCarriersRegisterStatus,
+  lookupClientByAccountAndUsername
 } = require('@jambonz/db-helpers')({
   host: process.env.JAMBONES_MYSQL_HOST,
   user: process.env.JAMBONES_MYSQL_USER,
@@ -100,7 +101,8 @@ srf.locals = {
     lookupSipGatewaysByCarrier,
     lookupAccountBySipRealm,
     lookupAccountCapacitiesBySid,
-    updateVoipCarriersRegisterStatus
+    updateVoipCarriersRegisterStatus,
+    lookupClientByAccountAndUsername
   },
   realtimeDbHelpers: {
     addKey,
@@ -174,47 +176,6 @@ const rttMetric = (req, res, time) => {
   }
 };
 
-class RegOutcomeReporter extends Emitter {
-  constructor() {
-    super();
-    this
-      .on('regHookOutcome', ({ rtt, status }) => {
-        stats.histogram('app.hook.response_time', rtt, ['hook_type:auth', `status:${status}`]);
-        if (![200, 403].includes(status)) {
-          stats.increment('app.hook.error.count', ['hook_type:auth', `status:${status}`]);
-        }
-      })
-      .on('error', async(err, req) => {
-        logger.error({ err }, 'http webhook failed');
-        const { account_sid } = req.locals;
-        if (account_sid) {
-          let opts = { account_sid };
-          if (err.code === 'ECONNREFUSED') {
-            opts = { ...opts, alert_type: AlertType.WEBHOOK_CONNECTION_FAILURE, url: err.hook };
-          }
-          else if (err.code === 'ENOTFOUND') {
-            opts = { ...opts, alert_type: AlertType.WEBHOOK_CONNECTION_FAILURE, url: err.hook };
-          }
-          else if (err.name === 'StatusError') {
-            opts = { ...opts, alert_type: AlertType.WEBHOOK_STATUS_FAILURE, url: err.hook, status: err.statusCode };
-          }
-
-          if (opts.alert_type) {
-            try {
-              await writeAlerts(opts);
-            } catch (err) {
-              logger.error({ err, opts }, 'Error writing alert');
-            }
-          }
-        }
-      });
-  }
-}
-
-const authenticator = require('@jambonz/http-authenticator')(lookupAuthHook, logger, {
-  emitter: new RegOutcomeReporter()
-});
-
 // middleware
 srf.use('register', [
   initLocals,
@@ -223,7 +184,7 @@ srf.use('register', [
   regParser,
   checkCache,
   checkAccountLimits,
-  authenticator]);
+  digestChallenge]);
 
 srf.use('options', [
   initLocals

@@ -44,7 +44,7 @@ const { initLocals, rejectIpv4, checkCache, checkAccountLimits } = require('./li
 const responseTime = require('drachtio-mw-response-time');
 const regParser = require('drachtio-mw-registration-parser');
 const Registrar = require('@jambonz/mw-registrar');
-const digestChallenge = require('./lib/register-authenticator');
+const digestChallenge = require('@jambonz/digest-utils');
 const debug = require('debug')('jambonz:sbc-registrar');
 const {
   lookupAuthHook,

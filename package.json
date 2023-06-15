@@ -32,7 +32,7 @@
     "@jambonz/realtimedb-helpers": "^0.8.6",
     "@jambonz/stats-collector": "^0.1.8",
     "@jambonz/time-series": "^0.2.5",
-    "@jambonz/digest-utils": "^0.0.2",
+    "@jambonz/digest-utils": "^0.0.3",
     "debug": "^4.3.4",
     "drachtio-mw-registration-parser": "^0.1.0",
     "drachtio-mw-response-time": "^1.0.2",

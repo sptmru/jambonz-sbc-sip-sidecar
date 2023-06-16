@@ -24,6 +24,8 @@ Configuration is provided via environment variables:
 |JAMBONES_TIME_SERIES_HOST| influxdb host |yes|
 |CHECK_EXPIRES_INTERVAL| servers expiration check interval |no|
 |EXPIRES_INTERVAL| servers expire |no|
+|JWT_SECRET| secret for signing JWT token |yes|
+|ENCRYPTION_SECRET| secret for credential encryption(JWT_SECRET is deprecated) |yes|
 
 ## Registrar database
 

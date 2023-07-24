@@ -143,7 +143,24 @@ srf.on('connect', (err, hp) => {
     }
   }
 
-  map.forEach((addr) => {
+  // Function to check if the IP address is in a private subnet (RFC 1918)
+  const isPrivateSubnet = (ip) => {
+    const [firstOctet, secondOctet] = ip.split('.').map(Number);
+    return (
+      (firstOctet === 10) || // 10.0.0.0/8
+      (firstOctet === 172 && secondOctet >= 16 && secondOctet <= 31) || // 172.16.0.0/12
+      (firstOctet === 192 && secondOctet === 168) // 192.168.0.0/16
+    );
+  };
+
+  logger.info({ips: [...map.entries()]}, 'drachtio sip contacts');
+  const mapOfPublicAddresses = map.size === 0 ? map : new Map(Array.from(
+    map.entries())
+    .filter(([key, value]) => !isPrivateSubnet(key)));
+
+  logger.info({ips: [...mapOfPublicAddresses.entries()]}, 'drachtio sip public contacts');
+
+  mapOfPublicAddresses.forEach((addr) => {
     addSbcAddress(addr.ipv4, addr.port, addr.tls_port, addr.wss_port);
     // keep alive for this SBC
     setTimeout(() => {
